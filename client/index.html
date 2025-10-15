@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go Chat - WebSocket</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Tùy chỉnh thanh cuộn cho đẹp hơn */
+        #chat-box::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-box::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        #chat-box::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        #chat-box::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen font-sans">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-full max-h-[90vh] flex flex-col p-6">
+        <div class="border-b-2 border-gray-200 pb-4 mb-4">
+            <h1 class="text-3xl font-bold text-gray-800 text-center">GoLang WebSocket Chat</h1>
+            <p id="status" class="text-center text-sm text-gray-500 mt-1">Đang kết nối...</p>
+        </div>
+        
+        <!-- Khu vực hiển thị tin nhắn -->
+        <div id="chat-box" class="flex-1 overflow-y-auto mb-4 p-4 bg-gray-50 rounded-lg">
+            <!-- Tin nhắn sẽ được thêm vào đây -->
+        </div>
+        
+        <!-- Khu vực nhập liệu -->
+        <div class="flex space-x-4">
+            <input type="text" id="name-input" placeholder="Nhập tên của bạn..." class="w-1/3 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+            <input type="text" id="message-input" placeholder="Nhập tin nhắn..." class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition" disabled>
+            <button id="send-button" class="bg-blue-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                Gửi
+            </button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const status = document.getElementById("status");
+            const chatBox = document.getElementById("chat-box");
+            const nameInput = document.getElementById("name-input");
+            const messageInput = document.getElementById("message-input");
+            const sendButton = document.getElementById("send-button");
+
+            let ws;
+
+            function connect() {
+                // Xác định giao thức ws:// hoặc wss://
+                const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                const host = `127.0.0.1:8080`; 
+                // window.location.host;
+                
+                ws = new WebSocket(`${protocol}//${host}/ws`);
+
+                ws.onopen = () => {
+                    status.textContent = "Đã kết nối";
+                    status.classList.remove("text-gray-500");
+                    status.classList.add("text-green-600");
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                };
+
+                ws.onmessage = (event) => {
+                    const messageData = JSON.parse(event.data);
+                    appendMessage(messageData.name, messageData.message);
+                };
+
+                ws.onclose = () => {
+                    status.textContent = "Đã ngắt kết nối. Đang thử lại...";
+                    status.classList.remove("text-green-600");
+                    status.classList.add("text-red-600");
+                    messageInput.disabled = true;
+                    sendButton.disabled = true;
+                    // Thử kết nối lại sau 3 giây
+                    setTimeout(connect, 3000);
+                };
+
+                ws.onerror = (error) => {
+                    console.error("Lỗi WebSocket:", error);
+                    status.textContent = "Lỗi kết nối";
+                    status.classList.add("text-red-600");
+                    ws.close();
+                };
+            }
+
+            function appendMessage(name, message) {
+                const messageElement = document.createElement("div");
+                messageElement.classList.add("mb-3", "p-3", "rounded-lg", "max-w-xs", "break-words");
+
+                const nameElement = document.createElement("div");
+                nameElement.classList.add("font-bold", "text-sm");
+                nameElement.textContent = name;
+
+                const textElement = document.createElement("div");
+                textElement.textContent = message;
+
+                // Phân biệt tin nhắn của mình và của người khác (ví dụ đơn giản)
+                if (name === nameInput.value) {
+                    messageElement.classList.add("bg-blue-500", "text-white", "ml-auto");
+                    nameElement.classList.add("text-blue-100");
+                } else {
+                    messageElement.classList.add("bg-gray-200", "text-gray-800", "mr-auto");
+                     nameElement.classList.add("text-gray-600");
+                }
+                
+                messageElement.appendChild(nameElement);
+                messageElement.appendChild(textElement);
+                chatBox.appendChild(messageElement);
+
+                // Tự động cuộn xuống tin nhắn mới nhất
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+
+            function sendMessage() {
+                const name = nameInput.value.trim();
+                const message = messageInput.value.trim();
+
+                if (name === "") {
+                    alert("Vui lòng nhập tên của bạn.");
+                    nameInput.focus();
+                    return;
+                }
+                if (message === "" || !ws || ws.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                const messageData = {
+                    name: name,
+                    message: message
+                };
+
+                ws.send(JSON.stringify(messageData));
+                messageInput.value = ""; // Xóa trường nhập liệu sau khi gửi
+                messageInput.focus();
+            }
+
+            sendButton.addEventListener("click", sendMessage);
+            messageInput.addEventListener("keypress", (event) => {
+                if (event.key === "Enter") {
+                    sendMessage();
+                }
+            });
+
+            // Bắt đầu kết nối
+            connect();
+        });
+    </script>
+</body>
+</html>
