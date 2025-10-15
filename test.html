@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <div id="status">Đang kết nối...</div>
+    <div id="messages"></div>
+    <input type="text" id="messageInput" placeholder="Nhập tin nhắn...">
+    <button onclick="sendMessage()">Gửi</button>
+
+    <script>
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+
+        let ws;
+
+        function connect() {
+            console.log('Đang thử kết nối WebSocket...');
+            const wsUrl = 'ws://127.0.0.1:8080/ws?user_id=test_user';
+            console.log('WebSocket URL:', wsUrl);
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                console.log('WebSocket đã kết nối!');
+                status.textContent = 'Đã kết nối';
+                status.style.color = 'green';
+            };
+
+            ws.onmessage = function(event) {
+                console.log('Nhận tin nhắn:', event.data);
+                const div = document.createElement('div');
+                div.textContent = event.data;
+                messages.appendChild(div);
+            };
+
+            ws.onclose = function() {
+                console.log('WebSocket đã đóng');
+                status.textContent = 'Đã ngắt kết nối';
+                status.style.color = 'red';
+            };
+
+            ws.onerror = function(error) {
+                console.error('Lỗi WebSocket:', error);
+                status.textContent = 'Lỗi kết nối';
+                status.style.color = 'red';
+            };
+        }
+
+        function sendMessage() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = messageInput.value;
+                ws.send(JSON.stringify({
+                    type: "message",
+                    data: { content: message },
+                    conversation_id: "test"
+                }));
+                messageInput.value = '';
+            }
+        }
+
+        // Kết nối ngay khi trang load
+        connect();
+    </script>
+</body>
+</html>

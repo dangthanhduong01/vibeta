@@ -3,157 +3,978 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Go Chat - WebSocket</title>
+    <title>ViBeta Chat - WebSocket</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Tùy chỉnh thanh cuộn cho đẹp hơn */
-        #chat-box::-webkit-scrollbar {
-            width: 8px;
+        /* Custom scrollbar */
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
         }
-        #chat-box::-webkit-scrollbar-track {
-            background: #f1f1f1;
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #f1f5f9;
             border-radius: 10px;
         }
-        #chat-box::-webkit-scrollbar-thumb {
-            background: #888;
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
             border-radius: 10px;
         }
-        #chat-box::-webkit-scrollbar-thumb:hover {
-            background: #555;
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* Typing animation */
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        
+        /* Connection status colors */
+        .status-connecting { color: #f59e0b; }
+        .status-connected { color: #10b981; }
+        .status-disconnected { color: #ef4444; }
+        
+        /* Reaction styles */
+        .message-bubble:hover .reaction-btn {
+            opacity: 1;
+        }
+        
+        .emoji-picker {
+            animation: fadeInScale 0.15s ease-out;
+        }
+        
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .reaction-item {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .reaction-item:hover {
+            transform: scale(1.05);
+        }
+        
+        .emoji-btn:hover {
+            transform: scale(1.2);
         }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen font-sans">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-full max-h-[90vh] flex flex-col p-6">
-        <div class="border-b-2 border-gray-200 pb-4 mb-4">
-            <h1 class="text-3xl font-bold text-gray-800 text-center">GoLang WebSocket Chat</h1>
-            <p id="status" class="text-center text-sm text-gray-500 mt-1">Đang kết nối...</p>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 h-screen font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <h1 class="text-2xl font-bold text-gray-800">ViBeta Chat</h1>
+                <div class="flex items-center space-x-4">
+                    <input type="text" id="name-input" placeholder="Nhập tên của bạn..." 
+                           class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    <span id="connection-status" class="text-sm status-connecting">Đang kết nối...</span>
+                    <button id="reconnect-btn" class="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors">
+                        Kết nối lại
+                    </button>
+                </div>
+            </div>
         </div>
-        
-        <!-- Khu vực hiển thị tin nhắn -->
-        <div id="chat-box" class="flex-1 overflow-y-auto mb-4 p-4 bg-gray-50 rounded-lg">
-            <!-- Tin nhắn sẽ được thêm vào đây -->
-        </div>
-        
-        <!-- Khu vực nhập liệu -->
-        <div class="flex space-x-4">
-            <input type="text" id="name-input" placeholder="Nhập tên của bạn..." class="w-1/3 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
-            <input type="text" id="message-input" placeholder="Nhập tin nhắn..." class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition" disabled>
-            <button id="send-button" class="bg-blue-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
-                Gửi
-            </button>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="flex h-[calc(100vh-70px)]">
+        <!-- Sidebar - Conversations List -->
+        <aside class="w-1/3 bg-white shadow-lg border-r flex flex-col">
+            <!-- Sidebar Header -->
+            <div class="p-4 border-b bg-gray-50">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-700">Cuộc trò chuyện</h2>
+                    <button id="new-conversation-btn" class="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors" title="Tạo cuộc trò chuyện mới">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Conversations List -->
+            <div id="conversations-list" class="flex-1 overflow-y-auto scrollbar-thin">
+                <!-- Conversations will be rendered here -->
+            </div>
+        </aside>
+
+        <!-- Chat Area -->
+        <main class="flex-1 flex flex-col">
+            <!-- Welcome Screen -->
+            <div id="welcome-screen" class="flex-1 flex items-center justify-center bg-gray-50">
+                <div class="text-center">
+                    <div class="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-700 mb-2">Chào mừng đến ViBeta Chat</h3>
+                    <p class="text-gray-500 mb-4">Chọn một cuộc trò chuyện từ danh sách bên trái hoặc tạo mới</p>
+                    <button id="start-chat-btn" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                        Bắt đầu trò chuyện
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Chat Area -->
+            <div id="chat-area" class="flex-1 flex flex-col hidden">
+                <!-- Chat Header -->
+                <div id="chat-header" class="bg-white shadow-sm border-b p-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                                <span class="text-sm font-semibold text-gray-600" id="chat-avatar">?</span>
+                            </div>
+                            <div>
+                                <h3 id="chat-title" class="font-semibold text-gray-800">Cuộc trò chuyện</h3>
+                                <p id="chat-subtitle" class="text-xs text-gray-500">Thông tin cuộc trò chuyện</p>
+                            </div>
+                        </div>
+                        <button id="leave-conversation-btn" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Rời cuộc trò chuyện">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages Container -->
+                <div id="messages-container" class="flex-1 overflow-y-auto p-4 scrollbar-thin bg-gray-50">
+                    <!-- Messages will be rendered here -->
+                </div>
+                
+                <!-- Typing Indicator -->
+                <div id="typing-indicator" class="px-4 py-2 hidden">
+                    <div class="flex items-center space-x-2 text-sm text-gray-500">
+                        <span id="typing-user"></span>
+                        <span>đang gõ</span>
+                        <div class="flex space-x-1">
+                            <div class="w-1 h-1 bg-gray-400 rounded-full typing-dot"></div>
+                            <div class="w-1 h-1 bg-gray-400 rounded-full typing-dot"></div>
+                            <div class="w-1 h-1 bg-gray-400 rounded-full typing-dot"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Message Input -->
+                <div class="bg-white border-t p-4">
+                    <div class="flex space-x-3">
+                        <input type="text" id="message-input" placeholder="Nhập tin nhắn..." 
+                               class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" 
+                               disabled>
+                        <button id="send-button" class="bg-blue-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Conversation Modal -->
+    <div id="new-conversation-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-96 max-w-lg mx-4">
+            <h3 class="text-lg font-semibold mb-4">Tạo cuộc trò chuyện mới</h3>
+            <form id="new-conversation-form" class="space-y-4">
+                <div>
+                    <label for="new-conversation-name" class="block text-sm font-medium text-gray-700 mb-2">Tên cuộc trò chuyện</label>
+                    <input type="text" id="new-conversation-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tên cuộc trò chuyện..." required>
+                </div>
+                <div>
+                    <label for="new-conversation-type" class="block text-sm font-medium text-gray-700 mb-2">Loại</label>
+                    <select id="new-conversation-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="direct">Chat 1-1</option>
+                        <option value="group">Nhóm</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" id="cancel-new-conversation" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Hủy</button>
+                    <button type="submit" id="create-new-conversation" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">Tạo</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const status = document.getElementById("status");
-            const chatBox = document.getElementById("chat-box");
-            const nameInput = document.getElementById("name-input");
-            const messageInput = document.getElementById("message-input");
-            const sendButton = document.getElementById("send-button");
-
-            let ws;
-
-            function connect() {
-                // Xác định giao thức ws:// hoặc wss://
-                const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-                const host = `127.0.0.1:8080`; 
-                // window.location.host;
+        class ChatApp {
+            constructor() {
+                this.ws = null;
+                this.currentUser = null;
+                this.currentConversation = null;
+                this.conversations = {};
+                this.typingTimeout = null;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
                 
-                ws = new WebSocket(`${protocol}//${host}/ws`);
-
-                ws.onopen = () => {
-                    status.textContent = "Đã kết nối";
-                    status.classList.remove("text-gray-500");
-                    status.classList.add("text-green-600");
-                    messageInput.disabled = false;
-                    sendButton.disabled = false;
-                };
-
-                ws.onmessage = (event) => {
-                    const messageData = JSON.parse(event.data);
-                    appendMessage(messageData.name, messageData.message);
-                };
-
-                ws.onclose = () => {
-                    status.textContent = "Đã ngắt kết nối. Đang thử lại...";
-                    status.classList.remove("text-green-600");
-                    status.classList.add("text-red-600");
-                    messageInput.disabled = true;
-                    sendButton.disabled = true;
-                    // Thử kết nối lại sau 3 giây
-                    setTimeout(connect, 3000);
-                };
-
-                ws.onerror = (error) => {
-                    console.error("Lỗi WebSocket:", error);
-                    status.textContent = "Lỗi kết nối";
-                    status.classList.add("text-red-600");
-                    ws.close();
-                };
+                this.initializeElements();
+                this.attachEventListeners();
+                this.initialize();
             }
 
-            function appendMessage(name, message) {
-                const messageElement = document.createElement("div");
-                messageElement.classList.add("mb-3", "p-3", "rounded-lg", "max-w-xs", "break-words");
+            initializeElements() {
+                // Status and control elements
+                this.connectionStatus = document.getElementById('connection-status');
+                this.nameInput = document.getElementById('name-input');
+                this.reconnectBtn = document.getElementById('reconnect-btn');
 
-                const nameElement = document.createElement("div");
-                nameElement.classList.add("font-bold", "text-sm");
-                nameElement.textContent = name;
+                // Layout elements
+                this.conversationsList = document.getElementById('conversations-list');
+                this.welcomeScreen = document.getElementById('welcome-screen');
+                this.chatArea = document.getElementById('chat-area');
+                this.chatHeader = document.getElementById('chat-header');
+                this.chatTitle = document.getElementById('chat-title');
+                this.chatSubtitle = document.getElementById('chat-subtitle');
+                this.chatAvatar = document.getElementById('chat-avatar');
 
-                const textElement = document.createElement("div");
-                textElement.textContent = message;
+                // Message elements
+                this.messagesContainer = document.getElementById('messages-container');
+                this.messageInput = document.getElementById('message-input');
+                this.sendButton = document.getElementById('send-button');
+                this.typingIndicator = document.getElementById('typing-indicator');
+                this.typingUser = document.getElementById('typing-user');
 
-                // Phân biệt tin nhắn của mình và của người khác (ví dụ đơn giản)
-                if (name === nameInput.value) {
-                    messageElement.classList.add("bg-blue-500", "text-white", "ml-auto");
-                    nameElement.classList.add("text-blue-100");
+                // Modal elements
+                this.newConversationBtn = document.getElementById('new-conversation-btn');
+                this.newConversationModal = document.getElementById('new-conversation-modal');
+                this.newConversationForm = document.getElementById('new-conversation-form');
+                this.newConversationName = document.getElementById('new-conversation-name');
+                this.newConversationType = document.getElementById('new-conversation-type');
+                this.cancelNewConversation = document.getElementById('cancel-new-conversation');
+                this.createNewConversation = document.getElementById('create-new-conversation');
+                this.startChatBtn = document.getElementById('start-chat-btn');
+                this.leaveConversationBtn = document.getElementById('leave-conversation-btn');
+            }
+
+            attachEventListeners() {
+                // Connection events
+                this.reconnectBtn.addEventListener('click', () => this.handleReconnect());
+                this.nameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && this.nameInput.value.trim()) {
+                        this.handleReconnect();
+                    }
+                });
+                this.nameInput.addEventListener('blur', () => {
+                    if (this.nameInput.value.trim() && (!this.ws || this.ws.readyState === WebSocket.CLOSED)) {
+                        this.connect();
+                    }
+                });
+
+                // Message events
+                this.sendButton.addEventListener('click', () => this.sendMessage());
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendMessage();
+                    }
+                });
+                this.messageInput.addEventListener('input', () => {
+                    this.sendTypingIndicator(this.messageInput.value.length > 0);
+                });
+                this.messageInput.addEventListener('blur', () => {
+                    this.sendTypingIndicator(false);
+                });
+
+                // Modal events
+                this.newConversationBtn.addEventListener('click', () => this.showNewConversationModal());
+                this.startChatBtn.addEventListener('click', () => this.showNewConversationModal());
+                this.cancelNewConversation.addEventListener('click', () => this.hideNewConversationModal());
+                this.newConversationForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.createConversation();
+                });
+
+                // Conversation events
+                this.leaveConversationBtn.addEventListener('click', () => this.leaveCurrentConversation());
+
+                // Close modal when clicking outside
+                this.newConversationModal.addEventListener('click', (e) => {
+                    if (e.target === this.newConversationModal) {
+                        this.hideNewConversationModal();
+                    }
+                });
+            }
+
+            initialize() {
+                console.log('Initializing ChatApp...');
+                this.loadDemoConversations();
+                
+                // Auto-connect with generated user if no name provided
+                if (this.nameInput.value.trim()) {
+                    this.currentUser = this.nameInput.value.trim();
                 } else {
-                    messageElement.classList.add("bg-gray-200", "text-gray-800", "mr-auto");
-                     nameElement.classList.add("text-gray-600");
+                    this.currentUser = `user_${Date.now()}`;
+                    this.nameInput.placeholder = `Tên hiện tại: ${this.currentUser}`;
                 }
                 
-                messageElement.appendChild(nameElement);
-                messageElement.appendChild(textElement);
-                chatBox.appendChild(messageElement);
-
-                // Tự động cuộn xuống tin nhắn mới nhất
-                chatBox.scrollTop = chatBox.scrollHeight;
+                this.connect();
             }
 
-            function sendMessage() {
-                const name = nameInput.value.trim();
-                const message = messageInput.value.trim();
+            loadDemoConversations() {
+                const demoConversations = [
+                    {
+                        id: 'general',
+                        name: 'General Chat',
+                        type: 'group',
+                        participants: ['user1', 'user2', 'user3'],
+                        lastMessage: { 
+                            content: 'Chào mọi người!', 
+                            timestamp: new Date(), 
+                            sender: 'user1' 
+                        }
+                    },
+                    {
+                        id: 'tech-talk',
+                        name: 'Tech Talk',
+                        type: 'group',
+                        participants: ['dev1', 'dev2'],
+                        lastMessage: { 
+                            content: 'Go là ngôn ngữ tuyệt vời!', 
+                            timestamp: new Date(), 
+                            sender: 'dev1' 
+                        }
+                    }
+                ];
 
-                if (name === "") {
-                    alert("Vui lòng nhập tên của bạn.");
-                    nameInput.focus();
-                    return;
-                }
-                if (message === "" || !ws || ws.readyState !== WebSocket.OPEN) {
-                    return;
+                demoConversations.forEach(conv => {
+                    this.conversations[conv.id] = conv;
+                });
+                this.renderConversations();
+            }
+
+            connect() {
+                console.log('Attempting to connect WebSocket...');
+                
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    console.log('Closing existing WebSocket connection');
+                    this.ws.close();
                 }
 
-                const messageData = {
-                    name: name,
-                    message: message
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const host = '127.0.0.1:8080';
+                const wsUrl = `${protocol}//${host}/ws?user_id=${encodeURIComponent(this.currentUser)}`;
+                
+                console.log(`Connecting to: ${wsUrl}`);
+                this.updateConnectionStatus('connecting');
+
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    console.log('WebSocket connected successfully');
+                    this.updateConnectionStatus('connected');
+                    this.reconnectAttempts = 0;
                 };
 
-                ws.send(JSON.stringify(messageData));
-                messageInput.value = ""; // Xóa trường nhập liệu sau khi gửi
-                messageInput.focus();
+                this.ws.onmessage = (event) => {
+                    this.handleWebSocketMessage(event);
+                };
+
+                this.ws.onclose = () => {
+                    console.log('WebSocket connection closed');
+                    this.updateConnectionStatus('disconnected');
+                    this.disableMessageInput();
+                    this.scheduleReconnect();
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    this.updateConnectionStatus('disconnected');
+                };
             }
 
-            sendButton.addEventListener("click", sendMessage);
-            messageInput.addEventListener("keypress", (event) => {
-                if (event.key === "Enter") {
-                    sendMessage();
+            handleReconnect() {
+                console.log('Manual reconnect triggered');
+                
+                if (this.nameInput.value.trim()) {
+                    this.currentUser = this.nameInput.value.trim();
+                } else if (!this.currentUser) {
+                    this.currentUser = `user_${Date.now()}`;
                 }
-            });
+                
+                console.log(`Reconnecting with user: ${this.currentUser}`);
+                this.reconnectAttempts = 0;
+                this.connect();
+            }
 
-            // Bắt đầu kết nối
-            connect();
+            scheduleReconnect() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+                    
+                    console.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+                    this.updateConnectionStatus('connecting', `Đang thử lại... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                    
+                    setTimeout(() => {
+                        this.connect();
+                    }, delay);
+                } else {
+                    console.log('Max reconnect attempts reached');
+                    this.updateConnectionStatus('disconnected', 'Không thể kết nối. Vui lòng thử lại.');
+                }
+            }
+
+            updateConnectionStatus(status, customMessage = null) {
+                this.connectionStatus.className = `text-sm status-${status}`;
+                
+                const statusMessages = {
+                    connecting: 'Đang kết nối...',
+                    connected: 'Đã kết nối',
+                    disconnected: 'Đã ngắt kết nối'
+                };
+
+                this.connectionStatus.textContent = customMessage || statusMessages[status] || 'Không xác định';
+            }
+
+            handleWebSocketMessage(event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    console.log('Received message:', message);
+
+                    switch (message.type) {
+                        case 'message':
+                            this.handleChatMessage(message);
+                            break;
+                        case 'typing':
+                            this.handleTypingIndicator(message);
+                            break;
+                        case 'conversation_list':
+                            this.handleConversationList(message);
+                            break;
+                        case 'conversation_created':
+                            this.handleConversationCreated(message);
+                            break;
+                        case 'user_joined':
+                        case 'user_left':
+                            this.handleUserEvent(message);
+                            break;
+                        case 'reaction':
+                            this.handleReactionMessage(message);
+                            break;
+                        default:
+                            console.log('Unhandled message type:', message.type);
+                    }
+                } catch (error) {
+                    console.error('Error parsing WebSocket message:', error);
+                }
+            }
+
+            handleChatMessage(message) {
+                if (message.conversation_id === this.currentConversation?.id) {
+                    const content = message.data?.content || message.data?.message || message.message;
+                    const messageId = message.data?.message_id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    this.appendMessage(message.user_id || 'Unknown', content, false, messageId);
+                }
+                this.updateConversationLastMessage(message.conversation_id, message);
+            }
+
+            handleTypingIndicator(message) {
+                if (message.conversation_id === this.currentConversation?.id && message.user_id !== this.currentUser) {
+                    this.showTypingIndicator(message.user_id, message.data.is_typing);
+                }
+            }
+
+            handleConversationList(message) {
+                this.conversations = { ...this.conversations, ...message.data };
+                this.renderConversations();
+            }
+
+            handleConversationCreated(message) {
+                const newConv = message.data;
+                if (newConv && newConv.id) {
+                    this.conversations[newConv.id] = newConv;
+                    this.renderConversations();
+
+                    if (message.user_id === this.currentUser) {
+                        this.selectConversation(newConv);
+                        this.appendSystemMessage(`Đã tạo cuộc trò chuyện "${newConv.name}" thành công!`);
+                    } else {
+                        this.showNotification(`${message.user_id} đã tạo cuộc trò chuyện mới: "${newConv.name}"`);
+                    }
+                }
+            }
+
+            handleUserEvent(message) {
+                if (message.conversation_id === this.currentConversation?.id) {
+                    const action = message.type === 'user_joined' ? 'đã tham gia' : 'đã rời';
+                    this.appendSystemMessage(`${message.user_id} ${action} cuộc trò chuyện`);
+                }
+            }
+
+            handleReactionMessage(message) {
+                if (message.conversation_id === this.currentConversation?.id) {
+                    const { message_id, emoji, action } = message.data;
+                    this.updateMessageReaction(message_id, message.user_id, emoji, action);
+                }
+            }
+
+            renderConversations() {
+                this.conversationsList.innerHTML = '';
+                
+                Object.values(this.conversations).forEach(conversation => {
+                    const element = this.createConversationElement(conversation);
+                    this.conversationsList.appendChild(element);
+                });
+            }
+
+            createConversationElement(conversation) {
+                const div = document.createElement('div');
+                const isActive = this.currentConversation?.id === conversation.id;
+                
+                div.className = `p-4 border-b hover:bg-gray-50 cursor-pointer transition-colors ${
+                    isActive ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                }`;
+                
+                div.onclick = () => this.selectConversation(conversation);
+                
+                div.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                            <span class="text-white text-sm font-semibold">${conversation.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-sm font-semibold text-gray-800 truncate">${conversation.name}</h4>
+                                <span class="text-xs text-gray-500">${conversation.type === 'group' ? '👥' : '👤'}</span>
+                            </div>
+                            <p class="text-xs text-gray-500 truncate">
+                                ${conversation.lastMessage ? conversation.lastMessage.content : 'Chưa có tin nhắn'}
+                            </p>
+                            <p class="text-xs text-gray-400">
+                                ${conversation.participants.length} thành viên
+                            </p>
+                        </div>
+                    </div>
+                `;
+                
+                return div;
+            }
+
+            selectConversation(conversation) {
+                if (this.currentConversation) {
+                    this.leaveConversation(this.currentConversation.id);
+                }
+
+                this.currentConversation = conversation;
+
+                // Update UI
+                this.welcomeScreen.classList.add('hidden');
+                this.chatArea.classList.remove('hidden');
+                
+                this.chatTitle.textContent = conversation.name;
+                this.chatSubtitle.textContent = `${conversation.participants.length} thành viên • ${conversation.type === 'group' ? 'Nhóm' : 'Chat riêng'}`;
+                this.chatAvatar.textContent = conversation.name.charAt(0).toUpperCase();
+
+                // Clear messages and enable input
+                this.messagesContainer.innerHTML = '';
+                this.enableMessageInput();
+
+                // Join conversation
+                this.joinConversation(conversation.id);
+                this.renderConversations();
+            }
+
+            joinConversation(conversationId) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const message = {
+                        type: 'join_conversation',
+                        data: conversationId,
+                        conversation_id: conversationId
+                    };
+                    this.ws.send(JSON.stringify(message));
+                    console.log(`Joined conversation: ${conversationId}`);
+                }
+            }
+
+            leaveConversation(conversationId) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const message = {
+                        type: 'leave_conversation',
+                        data: conversationId,
+                        conversation_id: conversationId
+                    };
+                    this.ws.send(JSON.stringify(message));
+                    console.log(`Left conversation: ${conversationId}`);
+                }
+            }
+
+            leaveCurrentConversation() {
+                if (this.currentConversation) {
+                    this.leaveConversation(this.currentConversation.id);
+                    this.currentConversation = null;
+
+                    // Reset UI
+                    this.welcomeScreen.classList.remove('hidden');
+                    this.chatArea.classList.add('hidden');
+                    this.disableMessageInput();
+                    this.renderConversations();
+                }
+            }
+
+            sendMessage() {
+                const content = this.messageInput.value.trim();
+                
+                if (!content || !this.currentConversation || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const message = {
+                    type: 'message',
+                    data: {
+                        content: content,
+                        type: 'text',
+                        message_id: messageId,
+                        conversation_id: this.currentConversation.id
+                    },
+                    conversation_id: this.currentConversation.id
+                };
+
+                this.ws.send(JSON.stringify(message));
+                this.messageInput.value = '';
+                this.messageInput.focus();
+            }
+
+            sendTypingIndicator(isTyping) {
+                if (!this.currentConversation || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+                const message = {
+                    type: 'typing',
+                    data: { is_typing: isTyping },
+                    conversation_id: this.currentConversation.id
+                };
+
+                this.ws.send(JSON.stringify(message));
+            }
+
+            showTypingIndicator(userId, isTyping) {
+                if (isTyping) {
+                    this.typingUser.textContent = userId;
+                    this.typingIndicator.classList.remove('hidden');
+
+                    clearTimeout(this.typingTimeout);
+                    this.typingTimeout = setTimeout(() => {
+                        this.typingIndicator.classList.add('hidden');
+                    }, 3000);
+                } else {
+                    this.typingIndicator.classList.add('hidden');
+                }
+            }
+
+            appendMessage(sender, content, isSystem = false, messageId = null) {
+                const messageDiv = document.createElement('div');
+                
+                if (isSystem) {
+                    messageDiv.className = 'mb-4 text-center';
+                    messageDiv.innerHTML = `
+                        <div class="text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1 inline-block">
+                            ${content}
+                        </div>
+                    `;
+                } else {
+                    const isOwnMessage = sender === this.currentUser;
+                    const msgId = messageId || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    messageDiv.className = `mb-4 ${isOwnMessage ? 'flex justify-end' : 'flex justify-start'}`;
+                    messageDiv.dataset.messageId = msgId;
+                    
+                    messageDiv.innerHTML = `
+                        <div class="message-bubble max-w-xs lg:max-w-md px-4 py-2 rounded-lg relative group ${
+                            isOwnMessage ? 'bg-blue-500 text-white' : 'bg-white shadow-sm'
+                        }">
+                            ${!isOwnMessage ? `<div class="text-xs font-semibold text-gray-600 mb-1">${sender}</div>` : ''}
+                            <div class="text-sm">${content}</div>
+                            <div class="text-xs ${isOwnMessage ? 'text-blue-100' : 'text-gray-400'} mt-1">
+                                ${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                            
+                            <!-- Reaction Button -->
+                            <button class="reaction-btn opacity-0 group-hover:opacity-100 absolute -top-3 ${isOwnMessage ? 'left-0' : 'right-0'} bg-gray-100 hover:bg-gray-200 rounded-full p-1 text-xs transition-all duration-200 shadow-md" 
+                                    onclick="window.chatApp.showEmojiPicker('${msgId}', event)">
+                                😊
+                            </button>
+                            
+                            <!-- Reactions Display -->
+                            <div class="reactions mt-1 flex flex-wrap gap-1" id="reactions-${msgId}">
+                                <!-- Reactions sẽ hiển thị ở đây -->
+                            </div>
+                        </div>
+                    `;
+                }
+
+                this.messagesContainer.appendChild(messageDiv);
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+                
+                return messageDiv;
+            }
+
+            appendSystemMessage(content) {
+                this.appendMessage('', content, true);
+            }
+
+            updateConversationLastMessage(conversationId, message) {
+                if (this.conversations[conversationId]) {
+                    this.conversations[conversationId].lastMessage = {
+                        content: message.data?.content || message.message,
+                        timestamp: new Date(),
+                        sender: message.user_id
+                    };
+                    this.renderConversations();
+                }
+            }
+
+            enableMessageInput() {
+                this.messageInput.disabled = false;
+                this.sendButton.disabled = false;
+                this.messageInput.focus();
+            }
+
+            disableMessageInput() {
+                this.messageInput.disabled = true;
+                this.sendButton.disabled = true;
+            }
+
+            showNewConversationModal() {
+                this.newConversationModal.classList.remove('hidden');
+                this.newConversationModal.classList.add('flex');
+                this.newConversationName.focus();
+            }
+
+            hideNewConversationModal() {
+                this.newConversationModal.classList.add('hidden');
+                this.newConversationModal.classList.remove('flex');
+                this.newConversationName.value = '';
+            }
+
+            createConversation() {
+                const name = this.newConversationName.value.trim();
+                const type = this.newConversationType.value;
+
+                if (!name) {
+                    alert('Vui lòng nhập tên cuộc trò chuyện');
+                    this.newConversationName.focus();
+                    return;
+                }
+
+                if (name.length < 2) {
+                    alert('Tên cuộc trò chuyện phải có ít nhất 2 ký tự');
+                    this.newConversationName.focus();
+                    return;
+                }
+
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    alert('Không thể tạo cuộc trò chuyện. Vui lòng kiểm tra kết nối.');
+                    return;
+                }
+
+                // Disable button to prevent multiple clicks
+                this.createNewConversation.disabled = true;
+                this.createNewConversation.textContent = 'Đang tạo...';
+
+                const message = {
+                    type: 'create_conversation',
+                    data: { name: name, type: type }
+                };
+
+                this.ws.send(JSON.stringify(message));
+
+                // Reset button
+                setTimeout(() => {
+                    this.createNewConversation.disabled = false;
+                    this.createNewConversation.textContent = 'Tạo';
+                }, 2000);
+
+                this.hideNewConversationModal();
+            }
+
+            showNotification(message) {
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300';
+                notification.textContent = message;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 300);
+                }, 5000);
+            }
+
+            showEmojiPicker(messageId, event) {
+                event.stopPropagation();
+                
+                // Remove existing emoji picker
+                const existingPicker = document.querySelector('.emoji-picker');
+                if (existingPicker) {
+                    existingPicker.remove();
+                }
+
+                const emojis = ['👍', '❤️', '😂', '😮', '😢', '😡', '👏', '🔥', '💯', '🎉'];
+                
+                const picker = document.createElement('div');
+                picker.className = 'emoji-picker absolute bg-white shadow-lg rounded-lg p-2 z-50 border';
+                picker.style.top = '100%';
+                picker.style.left = '0';
+                
+                picker.innerHTML = `
+                    <div class="flex flex-wrap gap-1 max-w-48">
+                        ${emojis.map(emoji => `
+                            <button class="emoji-btn hover:bg-gray-100 p-2 rounded text-lg transition-colors" 
+                                    data-emoji="${emoji}" 
+                                    onclick="window.chatApp.addReaction('${messageId}', '${emoji}')">
+                                ${emoji}
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+
+                // Position picker relative to button
+                const button = event.target.closest('.message-bubble');
+                if (button) {
+                    button.style.position = 'relative';
+                    button.appendChild(picker);
+                }
+
+                // Close picker when clicking outside
+                setTimeout(() => {
+                    const closeHandler = (e) => {
+                        if (!picker.contains(e.target)) {
+                            picker.remove();
+                            document.removeEventListener('click', closeHandler);
+                        }
+                    };
+                    document.addEventListener('click', closeHandler);
+                }, 100);
+            }
+
+            addReaction(messageId, emoji) {
+                if (!this.currentConversation || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                const reactionMessage = {
+                    type: 'reaction',
+                    data: {
+                        message_id: messageId,
+                        emoji: emoji,
+                        action: 'add'
+                    },
+                    conversation_id: this.currentConversation.id
+                };
+
+                this.ws.send(JSON.stringify(reactionMessage));
+                
+                // Close emoji picker
+                const picker = document.querySelector('.emoji-picker');
+                if (picker) {
+                    picker.remove();
+                }
+            }
+
+            updateMessageReaction(messageId, userId, emoji, action) {
+                const reactionsContainer = document.getElementById(`reactions-${messageId}`);
+                if (!reactionsContainer) return;
+
+                // Tìm hoặc tạo reaction button
+                let reactionBtn = reactionsContainer.querySelector(`[data-emoji="${emoji}"]`);
+                
+                if (!reactionBtn && action === 'add') {
+                    // Tạo reaction button mới
+                    reactionBtn = document.createElement('button');
+                    reactionBtn.className = 'reaction-item bg-gray-100 hover:bg-gray-200 rounded-full px-2 py-1 text-xs flex items-center gap-1 transition-colors';
+                    reactionBtn.dataset.emoji = emoji;
+                    reactionBtn.dataset.users = userId;
+                    reactionBtn.innerHTML = `
+                        <span>${emoji}</span>
+                        <span class="count">1</span>
+                    `;
+                    reactionBtn.onclick = () => this.toggleReaction(messageId, emoji);
+                    reactionsContainer.appendChild(reactionBtn);
+                } else if (reactionBtn) {
+                    // Cập nhật reaction button hiện có
+                    const users = reactionBtn.dataset.users ? reactionBtn.dataset.users.split(',') : [];
+                    const countSpan = reactionBtn.querySelector('.count');
+                    
+                    if (action === 'add' && !users.includes(userId)) {
+                        users.push(userId);
+                        reactionBtn.dataset.users = users.join(',');
+                        countSpan.textContent = users.length;
+                        
+                        // Highlight if current user reacted
+                        if (userId === this.currentUser) {
+                            reactionBtn.classList.add('bg-blue-100', 'text-blue-600');
+                            reactionBtn.classList.remove('bg-gray-100');
+                        }
+                    } else if (action === 'remove') {
+                        const userIndex = users.indexOf(userId);
+                        if (userIndex > -1) {
+                            users.splice(userIndex, 1);
+                            
+                            if (users.length === 0) {
+                                reactionBtn.remove();
+                            } else {
+                                reactionBtn.dataset.users = users.join(',');
+                                countSpan.textContent = users.length;
+                                
+                                // Remove highlight if current user removed reaction
+                                if (userId === this.currentUser) {
+                                    reactionBtn.classList.remove('bg-blue-100', 'text-blue-600');
+                                    reactionBtn.classList.add('bg-gray-100');
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            toggleReaction(messageId, emoji) {
+                if (!this.currentConversation || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                const reactionsContainer = document.getElementById(`reactions-${messageId}`);
+                const reactionBtn = reactionsContainer?.querySelector(`[data-emoji="${emoji}"]`);
+                
+                // Check if current user already reacted
+                const users = reactionBtn?.dataset.users ? reactionBtn.dataset.users.split(',') : [];
+                const hasReacted = users.includes(this.currentUser);
+                
+                const reactionMessage = {
+                    type: 'reaction',
+                    data: {
+                        message_id: messageId,
+                        emoji: emoji,
+                        action: hasReacted ? 'remove' : 'add'
+                    },
+                    conversation_id: this.currentConversation.id
+                };
+
+                this.ws.send(JSON.stringify(reactionMessage));
+            }
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, initializing ChatApp...');
+            window.chatApp = new ChatApp();
         });
     </script>
 </body>
