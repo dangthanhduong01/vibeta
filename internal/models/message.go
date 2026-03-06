@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // MessageType đại diện cho loại tin nhắn
@@ -27,33 +29,38 @@ const (
 
 // Message đại diện cho một tin nhắn
 type Message struct {
-	ID             string        `json:"id" bson:"_id,omitempty"`
-	ConversationID string        `json:"conversation_id" bson:"conversation_id"`
-	SenderID       string        `json:"sender_id" bson:"sender_id"`
-	Content        string        `json:"content" bson:"content"`
-	Type           MessageType   `json:"type" bson:"type"`
-	Status         MessageStatus `json:"status" bson:"status"`
-	ReplyToID      string        `json:"reply_to_id,omitempty" bson:"reply_to_id,omitempty"` // ID tin nhắn được reply
-	Attachments    []Attachment  `json:"attachments,omitempty" bson:"attachments,omitempty"`
-	Reactions      []Reaction    `json:"reactions,omitempty" bson:"reactions,omitempty"`
-	EditedAt       *time.Time    `json:"edited_at,omitempty" bson:"edited_at,omitempty"`
-	CreatedAt      time.Time     `json:"created_at" bson:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at" bson:"updated_at"`
+	ID             string         `json:"id" gorm:"primaryKey"`
+	ConversationID string         `json:"conversation_id" gorm:"not null;index"`
+	SenderID       string         `json:"sender_id" gorm:"not null;index"`
+	Content        string         `json:"content"`
+	Type           MessageType    `json:"type" gorm:"not null"`
+	Status         MessageStatus  `json:"status" gorm:"default:sent"`
+	ReplyToID      string         `json:"reply_to_id,omitempty" gorm:"index"`
+	Attachments    string         `json:"attachments,omitempty" gorm:"type:text"` // JSON string
+	Reactions      string         `json:"reactions,omitempty" gorm:"type:text"`   // JSON string
+	EditedAt       *time.Time     `json:"edited_at,omitempty"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	Sender       User         `json:"sender,omitempty" gorm:"foreignKey:SenderID"`
+	Conversation Conversation `json:"conversation,omitempty" gorm:"foreignKey:ConversationID"`
 }
 
 // Attachment đính kèm file
 type Attachment struct {
-	ID       string `json:"id" bson:"id"`
-	FileName string `json:"file_name" bson:"file_name"`
-	FileSize int64  `json:"file_size" bson:"file_size"`
-	FileType string `json:"file_type" bson:"file_type"`
-	URL      string `json:"url" bson:"url"`
+	ID       string `json:"id"`
+	FileName string `json:"file_name"`
+	FileSize int64  `json:"file_size"`
+	FileType string `json:"file_type"`
+	URL      string `json:"url"`
 }
 
 // Reaction phản ứng với tin nhắn
 type Reaction struct {
-	UserID string `json:"user_id" bson:"user_id"`
-	Emoji  string `json:"emoji" bson:"emoji"`
+	UserID string `json:"user_id"`
+	Emoji  string `json:"emoji"`
 }
 
 // SendMessageRequest request gửi tin nhắn

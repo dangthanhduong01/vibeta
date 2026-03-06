@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"vibeta/internal/db"
+	"vibeta/internal/kafka"
 	"vibeta/internal/models"
 
 	"github.com/gorilla/websocket"
@@ -64,10 +70,29 @@ type Hub struct {
 
 	// userClients map user ID -> client
 	userClients map[string]*Client
+
+	// database instance
+	db *db.Database
+
+	// Kafka message service
+	messageService *kafka.MessageService
 }
 
 // newHub tạo một Hub mới.
 func newHub() *Hub {
+	// Khởi tạo database
+	database := db.NewDatabase()
+
+	// Khởi tạo Kafka message service (chỉ producer cho WebSocket server)
+	os.Setenv("KAFKA_ENABLE_PRODUCER", "true")
+	os.Setenv("KAFKA_ENABLE_CONSUMER", "false") // WebSocket server không cần consumer
+
+	messageService, err := kafka.NewMessageService(database)
+	if err != nil {
+		log.Printf("Lỗi khởi tạo Kafka message service: %v. Sử dụng database trực tiếp.", err)
+		messageService = nil
+	}
+
 	return &Hub{
 		broadcast:           make(chan []byte),
 		register:            make(chan *Client),
@@ -75,6 +100,8 @@ func newHub() *Hub {
 		clients:             make(map[*Client]bool),
 		conversationClients: make(map[string]map[*Client]bool),
 		userClients:         make(map[string]*Client),
+		db:                  database,
+		messageService:      messageService,
 	}
 }
 
@@ -170,6 +197,9 @@ func (h *Hub) JoinConversation(client *Client, conversationID string) {
 			}
 		}
 	}
+
+	// Gửi lịch sử tin nhắn cho client mới join
+	h.sendMessageHistory(client, conversationID)
 
 	log.Printf("Client %s đã tham gia conversation %s", client.userID, conversationID)
 }
@@ -305,6 +335,118 @@ func (h *Hub) CreateConversation(client *Client, wsMsg models.WebSocketMessage) 
 	log.Printf("Client %s đã tạo conversation mới: %s (%s)", client.userID, name, conversationID)
 }
 
+// saveMessageToDB gửi tin nhắn vào Kafka queue thay vì lưu trực tiếp
+func (h *Hub) saveMessageToDB(wsMsg models.WebSocketMessage, userID string) {
+	// Nếu có Kafka service, sử dụng queue
+	if h.messageService != nil && h.messageService.GetProducer() != nil {
+		err := h.messageService.GetProducer().PublishChatMessage(wsMsg, userID)
+		if err != nil {
+			log.Printf("Lỗi gửi message vào Kafka: %v. Fallback to direct DB save.", err)
+			h.saveMessageToDBDirect(wsMsg, userID)
+		} else {
+			log.Printf("Đã gửi message từ user %s vào Kafka queue", userID)
+		}
+	} else {
+		// Fallback: lưu trực tiếp vào database
+		h.saveMessageToDBDirect(wsMsg, userID)
+	}
+}
+
+// saveMessageToDBDirect lưu tin nhắn trực tiếp vào database (fallback)
+func (h *Hub) saveMessageToDBDirect(wsMsg models.WebSocketMessage, userID string) {
+	if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+		content, _ := data["content"].(string)
+		messageType, _ := data["type"].(string)
+		messageID, _ := data["message_id"].(string)
+		conversationID := wsMsg.ConvID
+
+		// Tạo ID nếu chưa có
+		if messageID == "" {
+			messageID = fmt.Sprintf("msg_%s_%d", userID, time.Now().UnixNano())
+		}
+
+		message := &models.Message{
+			ID:             messageID,
+			ConversationID: conversationID,
+			SenderID:       userID,
+			Content:        content,
+			Type:           models.MessageType(messageType),
+			Status:         models.MessageStatusSent,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+		}
+
+		err := h.db.SaveMessage(message)
+		if err != nil {
+			log.Printf("Lỗi lưu tin nhắn trực tiếp vào DB: %v", err)
+		} else {
+			log.Printf("Đã lưu tin nhắn %s trực tiếp vào DB", messageID)
+		}
+	}
+}
+
+// saveReactionToDB gửi reaction vào Kafka queue thay vì lưu trực tiếp
+func (h *Hub) saveReactionToDB(wsMsg models.WebSocketMessage, userID string) {
+	// Nếu có Kafka service, sử dụng queue
+	if h.messageService != nil && h.messageService.GetProducer() != nil {
+		if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+			messageID, _ := data["message_id"].(string)
+			emoji, _ := data["emoji"].(string)
+			action, _ := data["action"].(string)
+			conversationID := wsMsg.ConvID
+
+			err := h.messageService.GetProducer().PublishReaction(messageID, userID, emoji, action, conversationID)
+			if err != nil {
+				log.Printf("Lỗi gửi reaction vào Kafka: %v", err)
+			} else {
+				log.Printf("Đã gửi reaction từ user %s vào Kafka queue", userID)
+			}
+		}
+	} else {
+		// Fallback: log để tracking (chưa implement reaction DB)
+		if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+			messageID, _ := data["message_id"].(string)
+			emoji, _ := data["emoji"].(string)
+			action, _ := data["action"].(string)
+
+			log.Printf("User %s %s reaction %s cho message %s (fallback mode)", userID, action, emoji, messageID)
+		}
+	}
+}
+
+// sendMessageHistory gửi lịch sử tin nhắn cho client
+func (h *Hub) sendMessageHistory(client *Client, conversationID string) {
+	messages, err := h.db.GetMessages(conversationID, 50, 0) // Lấy 50 tin nhắn gần nhất
+	if err != nil {
+		log.Printf("Lỗi lấy lịch sử tin nhắn: %v", err)
+		return
+	}
+
+	for _, message := range messages {
+		wsMsg := models.WebSocketMessage{
+			Type:   "message",
+			UserID: message.SenderID,
+			ConvID: conversationID,
+			Data: map[string]interface{}{
+				"message_id": message.ID,
+				"content":    message.Content,
+				"type":       message.Type,
+				"created_at": message.CreatedAt,
+			},
+		}
+
+		if messageData, err := json.Marshal(wsMsg); err == nil {
+			select {
+			case client.send <- messageData:
+			default:
+				close(client.send)
+				delete(h.clients, client)
+				return
+			}
+		}
+	}
+}
+
 // readPump đọc tin nhắn từ kết nối WebSocket của client.
 func (c *Client) readPump() {
 	defer func() {
@@ -344,6 +486,17 @@ func (c *Client) readPump() {
 		case "message", "typing", "reaction":
 			// Gửi tin nhắn đến kênh broadcast
 			wsMsg.UserID = c.userID // Đảm bảo tin nhắn có thông tin người gửi
+
+			// Lưu tin nhắn vào database nếu là message
+			if wsMsg.Type == "message" {
+				c.hub.saveMessageToDB(wsMsg, c.userID)
+			}
+
+			// Lưu reaction vào database
+			if wsMsg.Type == "reaction" {
+				c.hub.saveReactionToDB(wsMsg, c.userID)
+			}
+
 			if updatedMessage, err := json.Marshal(wsMsg); err == nil {
 				c.hub.broadcast <- updatedMessage
 			} else {
@@ -414,25 +567,61 @@ func main() {
 	hub := newHub()
 	go hub.run()
 
+	// Setup graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle shutdown signals
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+		log.Println("Nhận được signal shutdown...")
+		cancel()
+	}()
+
 	// Cấu hình router HTTP.
 	// Route "/" sẽ phục vụ tệp index.html.
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "../client/index.html")
+		http.ServeFile(w, r, "client/index.html")
 	})
 
 	// Route "/test" để test WebSocket cơ bản
 	http.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "../test.html")
+		http.ServeFile(w, r, "test.html")
 	})
 
 	// Route "/debug" để debug WebSocket
 	http.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "../debug.html")
+		http.ServeFile(w, r, "debug.html")
 	})
 
 	// Route "/simple" để test WebSocket đơn giản
 	http.HandleFunc("/simple", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "../simple.html")
+		http.ServeFile(w, r, "simple.html")
+	})
+
+	// Route "/admin" để xem admin dashboard
+	http.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "admin.html")
+	})
+
+	// Route "/health" để kiểm tra trạng thái system
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		health := map[string]interface{}{
+			"status":        "healthy",
+			"timestamp":     time.Now(),
+			"clients":       len(hub.clients),
+			"conversations": len(hub.conversationClients),
+		}
+
+		if hub.messageService != nil {
+			health["kafka"] = hub.messageService.HealthCheck()
+		}
+
+		json.NewEncoder(w).Encode(health)
 	})
 
 	// Route "/ws" sẽ xử lý các kết nối WebSocket.
@@ -440,10 +629,40 @@ func main() {
 		serveWs(hub, w, r)
 	})
 
-	// Khởi động máy chủ web.
-	log.Println("Máy chủ đang chạy tại http://localhost:8080")
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+	// Khởi động máy chủ web với graceful shutdown
+	server := &http.Server{
+		Addr: ":8080",
 	}
+
+	// Khởi động server trong goroutine
+	go func() {
+		log.Println("Máy chủ WebSocket đang chạy tại http://localhost:8080")
+		log.Println("Kafka integration: enabled")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("ListenAndServe: %v", err)
+		}
+	}()
+
+	// Đợi shutdown signal
+	<-ctx.Done()
+
+	// Graceful shutdown với timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	log.Println("Đang shutdown server...")
+
+	// Shutdown HTTP server
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+
+	// Close message service
+	if hub.messageService != nil {
+		if err := hub.messageService.Close(); err != nil {
+			log.Printf("Message service close error: %v", err)
+		}
+	}
+
+	log.Println("Server đã shutdown thành công")
 }

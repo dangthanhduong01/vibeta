@@ -2,19 +2,22 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // User đại diện cho một người dùng trong hệ thống
 type User struct {
-	ID         string     `json:"id" bson:"_id,omitempty"`
-	Username   string     `json:"username" bson:"username"`
-	Email      string     `json:"email" bson:"email"`
-	FullName   string     `json:"full_name" bson:"full_name"`
-	Avatar     string     `json:"avatar,omitempty" bson:"avatar,omitempty"`
-	Status     UserStatus `json:"status" bson:"status"`
-	LastActive time.Time  `json:"last_active" bson:"last_active"`
-	CreatedAt  time.Time  `json:"created_at" bson:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at" bson:"updated_at"`
+	ID         string         `json:"id" gorm:"primaryKey"`
+	Username   string         `json:"username" gorm:"uniqueIndex;not null"`
+	Email      string         `json:"email" gorm:"uniqueIndex;not null"`
+	FullName   string         `json:"full_name" gorm:"not null"`
+	Avatar     string         `json:"avatar,omitempty"`
+	Status     UserStatus     `json:"status" gorm:"default:offline"`
+	LastActive time.Time      `json:"last_active"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 // UserStatus đại diện cho trạng thái của người dùng

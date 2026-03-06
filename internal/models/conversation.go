@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // ConversationType đại diện cho loại cuộc trò chuyện
@@ -14,42 +16,50 @@ const (
 
 // Conversation đại diện cho một cuộc trò chuyện
 type Conversation struct {
-	ID           string           `json:"id" bson:"_id,omitempty"`
-	Type         ConversationType `json:"type" bson:"type"`
-	Name         string           `json:"name,omitempty" bson:"name,omitempty"`               // Tên nhóm (chỉ dùng cho group)
-	Description  string           `json:"description,omitempty" bson:"description,omitempty"` // Mô tả nhóm
-	Avatar       string           `json:"avatar,omitempty" bson:"avatar,omitempty"`           // Avatar nhóm
-	Participants []string         `json:"participants" bson:"participants"`                   // Danh sách ID của người tham gia
-	CreatedBy    string           `json:"created_by" bson:"created_by"`                       // ID người tạo
-	LastMessage  *LastMessage     `json:"last_message,omitempty" bson:"last_message,omitempty"`
-	CreatedAt    time.Time        `json:"created_at" bson:"created_at"`
-	UpdatedAt    time.Time        `json:"updated_at" bson:"updated_at"`
+	ID          string           `json:"id" gorm:"primaryKey"`
+	Type        ConversationType `json:"type" gorm:"not null"`
+	Name        string           `json:"name,omitempty"`
+	Description string           `json:"description,omitempty"`
+	Avatar      string           `json:"avatar,omitempty"`
+	CreatedBy   string           `json:"created_by" gorm:"not null;index"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt   `json:"-" gorm:"index"`
+
+	// Relations
+	Creator      User                      `json:"creator,omitempty" gorm:"foreignKey:CreatedBy"`
+	Participants []ConversationParticipant `json:"participants,omitempty" gorm:"foreignKey:ConversationID"`
+	Messages     []Message                 `json:"messages,omitempty" gorm:"foreignKey:ConversationID"`
+}
+
+// ConversationParticipant người tham gia cuộc trò chuyện
+type ConversationParticipant struct {
+	ID             uint       `json:"id" gorm:"primaryKey;autoIncrement"`
+	ConversationID string     `json:"conversation_id" gorm:"not null;index"`
+	UserID         string     `json:"user_id" gorm:"not null;index"`
+	JoinedAt       time.Time  `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
+	LeftAt         *time.Time `json:"left_at,omitempty"`
+
+	// Relations
+	Conversation Conversation `json:"conversation,omitempty" gorm:"foreignKey:ConversationID"`
+	User         User         `json:"user,omitempty" gorm:"foreignKey:UserID"`
 }
 
 // LastMessage thông tin tin nhắn cuối cùng trong conversation
 type LastMessage struct {
-	ID        string    `json:"id" bson:"id"`
-	Content   string    `json:"content" bson:"content"`
-	Type      string    `json:"type" bson:"type"`
-	SenderID  string    `json:"sender_id" bson:"sender_id"`
-	Timestamp time.Time `json:"timestamp" bson:"timestamp"`
-}
-
-// ConversationParticipant thông tin người tham gia cuộc trò chuyện
-type ConversationParticipant struct {
-	ConversationID string    `json:"conversation_id" bson:"conversation_id"`
-	UserID         string    `json:"user_id" bson:"user_id"`
-	Role           string    `json:"role" bson:"role"` // "admin", "member"
-	JoinedAt       time.Time `json:"joined_at" bson:"joined_at"`
-	LastReadAt     time.Time `json:"last_read_at" bson:"last_read_at"`
+	ID        string    `json:"id"`
+	Content   string    `json:"content"`
+	Type      string    `json:"type"`
+	SenderID  string    `json:"sender_id"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // CreateConversationRequest request tạo cuộc trò chuyện mới
 type CreateConversationRequest struct {
-	Type         ConversationType `json:"type" validate:"required"`
-	Name         string           `json:"name,omitempty" validate:"max=100"`
-	Description  string           `json:"description,omitempty" validate:"max=500"`
-	Participants []string         `json:"participants" validate:"required,min=1"`
+	Type           ConversationType `json:"type" validate:"required"`
+	Name           string           `json:"name,omitempty" validate:"max=100"`
+	Description    string           `json:"description,omitempty" validate:"max=500"`
+	ParticipantIDs []string         `json:"participant_ids" validate:"required,min=1"`
 }
 
 // AddParticipantRequest request thêm người tham gia
