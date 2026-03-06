@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViBeta Chat - Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-8">Chat Admin Dashboard</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Messages Table -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Recent Messages</h2>
+                <div id="messages-table" class="space-y-2">
+                    <p class="text-gray-500">Loading messages...</p>
+                </div>
+            </div>
+            
+            <!-- Users Online -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Active Users</h2>
+                <div id="users-list" class="space-y-2">
+                    <p class="text-gray-500">No users online</p>
+                </div>
+            </div>
+            
+            <!-- Conversations -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Conversations</h2>
+                <div id="conversations-list" class="space-y-2">
+                    <p class="text-gray-500">Loading conversations...</p>
+                </div>
+            </div>
+            
+            <!-- Database Stats -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Database Statistics</h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Total Messages:</span>
+                        <span id="total-messages" class="font-semibold">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Total Users:</span>
+                        <span id="total-users" class="font-semibold">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Total Conversations:</span>
+                        <span id="total-conversations" class="font-semibold">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Real-time Activity -->
+        <div class="mt-8 bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Real-time Activity</h2>
+            <div id="activity-log" class="max-h-64 overflow-y-auto space-y-1">
+                <p class="text-gray-500 text-sm">Waiting for activity...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        class AdminDashboard {
+            constructor() {
+                this.ws = null;
+                this.activityLog = document.getElementById('activity-log');
+                this.init();
+            }
+            
+            init() {
+                this.connectWebSocket();
+                this.loadInitialData();
+            }
+            
+            connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const host = window.location.host;
+                const wsUrl = `${protocol}//${host}/admin-ws`;
+                
+                // For now, connect to regular WebSocket to monitor activity
+                const regularWsUrl = `${protocol}//${host}/ws?user_id=admin_dashboard`;
+                
+                this.ws = new WebSocket(regularWsUrl);
+                
+                this.ws.onopen = () => {
+                    this.log('Connected to WebSocket', 'success');
+                };
+                
+                this.ws.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        this.handleMessage(message);
+                    } catch (error) {
+                        console.error('Error parsing message:', error);
+                    }
+                };
+                
+                this.ws.onclose = () => {
+                    this.log('WebSocket connection closed', 'error');
+                    setTimeout(() => this.connectWebSocket(), 3000);
+                };
+                
+                this.ws.onerror = (error) => {
+                    this.log('WebSocket error: ' + error, 'error');
+                };
+            }
+            
+            handleMessage(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                let activityText = '';
+                
+                switch (message.type) {
+                    case 'message':
+                        activityText = `${timestamp} - ${message.user_id} sent a message`;
+                        break;
+                    case 'user_joined':
+                        activityText = `${timestamp} - ${message.user_id} joined conversation`;
+                        break;
+                    case 'user_left':
+                        activityText = `${timestamp} - ${message.user_id} left conversation`;
+                        break;
+                    case 'reaction':
+                        activityText = `${timestamp} - ${message.user_id} added reaction`;
+                        break;
+                    case 'conversation_created':
+                        activityText = `${timestamp} - ${message.user_id} created new conversation`;
+                        break;
+                    default:
+                        activityText = `${timestamp} - ${message.type} event`;
+                }
+                
+                this.log(activityText, 'info');
+            }
+            
+            log(message, type = 'info') {
+                const logElement = document.createElement('div');
+                logElement.className = `text-sm p-2 rounded ${this.getLogColor(type)}`;
+                logElement.textContent = message;
+                
+                this.activityLog.insertBefore(logElement, this.activityLog.firstChild);
+                
+                // Keep only last 50 entries
+                while (this.activityLog.children.length > 50) {
+                    this.activityLog.removeChild(this.activityLog.lastChild);
+                }
+            }
+            
+            getLogColor(type) {
+                switch (type) {
+                    case 'success': return 'bg-green-100 text-green-800';
+                    case 'error': return 'bg-red-100 text-red-800';
+                    case 'warning': return 'bg-yellow-100 text-yellow-800';
+                    default: return 'bg-blue-100 text-blue-800';
+                }
+            }
+            
+            loadInitialData() {
+                // Load demo data
+                document.getElementById('total-messages').textContent = '0';
+                document.getElementById('total-users').textContent = '0';
+                document.getElementById('total-conversations').textContent = '2';
+                
+                // Messages table
+                const messagesTable = document.getElementById('messages-table');
+                messagesTable.innerHTML = '<p class="text-gray-500">No messages yet. Send some messages to see them here!</p>';
+                
+                // Conversations list
+                const conversationsList = document.getElementById('conversations-list');
+                conversationsList.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="p-2 border rounded">
+                            <div class="font-semibold">General Chat</div>
+                            <div class="text-sm text-gray-600">Group • 3 participants</div>
+                        </div>
+                        <div class="p-2 border rounded">
+                            <div class="font-semibold">Tech Talk</div>
+                            <div class="text-sm text-gray-600">Group • 2 participants</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            new AdminDashboard();
+        });
+    </script>
+</body>
+</html>

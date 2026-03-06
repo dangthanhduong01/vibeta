@@ -1,0 +1,79 @@
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+/logs/*.log
+/logs/*.out
+*.log
+
+# Environment variables
+.env
+app.env
+.env.local
+.env.production
+
+# SQLite database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+
+# Docker volumes
+/data/
+
+# Build artifacts
+/dist/
+/build/
+/bin/
+
+# Node modules (if any frontend tools)
+node_modules/
+
+# Coverage reports
+coverage.txt
+coverage.html
+
+# Test outputs
+testdata/
+
+# Kafka/Docker data
+/docker-data/
+/kafka-logs/
+/postgres-data/
+/zookeeper-data/

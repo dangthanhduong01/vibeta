@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug WebSocket</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .pending { background-color: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Debug</h1>
+    
+    <div>
+        <input type="text" id="username" placeholder="Nhập tên..." value="TestUser">
+        <button onclick="testConnect()">Kết nối</button>
+    </div>
+    
+    <div id="status" class="status pending">Sẵn sàng</div>
+    
+    <div>
+        <input type="text" id="messageInput" placeholder="Tin nhắn...">
+        <button onclick="sendTestMessage()">Gửi</button>
+    </div>
+    
+    <div id="logs"></div>
+
+    <script>
+        let ws = null;
+        
+        function log(message, type = 'info') {
+            console.log(message);
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            div.style.color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            logs.appendChild(div);
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        function updateStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        function testConnect() {
+            const username = document.getElementById('username').value.trim() || 'Anonymous';
+            
+            log(`Đang thử kết nối với user: ${username}`);
+            updateStatus('Đang kết nối...', 'pending');
+            
+            if (ws) {
+                ws.close();
+            }
+            
+            const wsUrl = `ws://127.0.0.1:8080/ws?user_id=${username}`;
+            log(`WebSocket URL: ${wsUrl}`);
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                log('WebSocket kết nối thành công!', 'success');
+                updateStatus('Đã kết nối', 'success');
+            };
+            
+            ws.onmessage = function(event) {
+                log(`Nhận: ${event.data}`, 'success');
+            };
+            
+            ws.onclose = function(event) {
+                log(`WebSocket đóng. Code: ${event.code}, Reason: ${event.reason}`, 'error');
+                updateStatus('Đã ngắt kết nối', 'error');
+            };
+            
+            ws.onerror = function(error) {
+                log(`Lỗi WebSocket: ${error}`, 'error');
+                updateStatus('Lỗi kết nối', 'error');
+            };
+        }
+        
+        function sendTestMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('WebSocket chưa kết nối', 'error');
+                return;
+            }
+            
+            const message = document.getElementById('messageInput').value.trim();
+            if (!message) return;
+            
+            const wsMessage = {
+                type: "message",
+                data: { content: message },
+                conversation_id: "test"
+            };
+            
+            ws.send(JSON.stringify(wsMessage));
+            log(`Đã gửi: ${message}`);
+            document.getElementById('messageInput').value = '';
+        }
+        
+        // Auto connect khi trang load
+        window.onload = function() {
+            log('Trang đã load, sẵn sàng test');
+        };
+    </script>
+</body>
+</html>
