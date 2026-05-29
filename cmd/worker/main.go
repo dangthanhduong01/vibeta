@@ -15,13 +15,11 @@ import (
 func main() {
 	log.Println("Starting Message Worker Service...")
 
-	// Khởi tạo database
 	database := db.NewDatabase()
 	if database == nil {
 		log.Fatal("Không thể kết nối database")
 	}
 
-	// Khởi tạo Kafka message service (chỉ consumer)
 	os.Setenv("KAFKA_ENABLE_PRODUCER", "false") // Worker chỉ cần consumer
 	os.Setenv("KAFKA_ENABLE_CONSUMER", "true")
 

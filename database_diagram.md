@@ -1,6 +1,6 @@
 # ViBeta Chat - Database Schema Diagram
 
-## 📊 Sơ đồ Database
+## Sơ đồ Database
 
 ```mermaid
 erDiagram
@@ -64,7 +64,7 @@ erDiagram
     MESSAGES ||--o{ MESSAGES : replies_to
 ```
 
-## 🔗 Chi tiết mối quan hệ (Relationships)
+## Chi tiết mối quan hệ (Relationships)
 
 ### 1. **Users → Conversations** (1:N)
 - Một user có thể tạo nhiều conversations
@@ -87,9 +87,9 @@ erDiagram
 - Tin nhắn có thể reply tin nhắn khác
 - `reply_to_id` tham chiếu đến `messages.id`
 
-## 📋 Bảng chi tiết
+## Bảng chi tiết
 
-### 🧑‍💻 **USERS** Table
+### **USERS** Table
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `id` | VARCHAR(255) | PRIMARY KEY | User unique identifier |
@@ -103,7 +103,7 @@ erDiagram
 | `updated_at` | TIMESTAMP | | Last update time |
 | `deleted_at` | TIMESTAMP | NULLABLE | Soft delete timestamp |
 
-### 💬 **CONVERSATIONS** Table
+### **CONVERSATIONS** Table
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `id` | VARCHAR(255) | PRIMARY KEY | Conversation unique identifier |
@@ -116,7 +116,7 @@ erDiagram
 | `updated_at` | TIMESTAMP | | Last update time |
 | `deleted_at` | TIMESTAMP | NULLABLE | Soft delete timestamp |
 
-### 📨 **MESSAGES** Table
+### **MESSAGES** Table
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `id` | VARCHAR(255) | PRIMARY KEY | Message unique identifier |
@@ -133,7 +133,7 @@ erDiagram
 | `updated_at` | TIMESTAMP | | Last update time |
 | `deleted_at` | TIMESTAMP | NULLABLE | Soft delete timestamp |
 
-### 👥 **CONVERSATION_PARTICIPANTS** Table
+### **CONVERSATION_PARTICIPANTS** Table
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `id` | INTEGER | PRIMARY KEY, AUTO_INCREMENT | Participant record ID |
@@ -142,7 +142,7 @@ erDiagram
 | `joined_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Join time |
 | `left_at` | TIMESTAMP | NULLABLE | Leave time (null = active) |
 
-## 🗂️ Indexes
+## Indexes
 
 ### **USERS**
 - `idx_users_username` (UNIQUE)
@@ -163,14 +163,14 @@ erDiagram
 - `idx_conversation_participants_conversation_id`
 - `idx_conversation_participants_user_id`
 
-## 💾 Database Engine
+## Database Engine
 - **Primary**: PostgreSQL (Production)
 - **Fallback**: SQLite (Development)
 - **ORM**: GORM (Go ORM Library)
 
-## 🔄 Features Supported
+## Features Supported
 
-### ✅ **Implemented**
+### **Implemented**
 - User management với soft delete
 - Conversation creation (direct + group)
 - Message sending và persistence
@@ -179,14 +179,14 @@ erDiagram
 - Emoji reactions (JSON field)
 - File attachments (JSON field)
 
-### 🔄 **Planned**
+### **Planned**
 - Message read receipts
 - User roles trong conversations
 - Message search indexing
 - File storage optimization
 - Message encryption
 
-## 📝 Sample Queries
+## Sample Queries
 
 ### Get user's conversations:
 ```sql

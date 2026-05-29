@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// Response cấu trúc response chung
 type Response struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message,omitempty"`
@@ -10,13 +9,11 @@ type Response struct {
 	Error   string      `json:"error,omitempty"`
 }
 
-// PaginationRequest request phân trang
 type PaginationRequest struct {
 	Page     int `json:"page" form:"page" validate:"min=1"`
 	PageSize int `json:"page_size" form:"page_size" validate:"min=1,max=100"`
 }
 
-// PaginationResponse response phân trang
 type PaginationResponse struct {
 	Page       int         `json:"page"`
 	PageSize   int         `json:"page_size"`
@@ -25,7 +22,6 @@ type PaginationResponse struct {
 	Items      interface{} `json:"items"`
 }
 
-// ErrorCode mã lỗi
 type ErrorCode string
 
 const (
@@ -38,7 +34,6 @@ const (
 	ErrCodeConversationExists ErrorCode = "CONVERSATION_EXISTS"
 )
 
-// APIError lỗi API
 type APIError struct {
 	Code    ErrorCode `json:"code"`
 	Message string    `json:"message"`
@@ -49,7 +44,6 @@ func (e APIError) Error() string {
 	return e.Message
 }
 
-// OnlineUser người dùng đang online
 type OnlineUser struct {
 	UserID      string     `json:"user_id"`
 	Username    string     `json:"username"`
@@ -60,7 +54,6 @@ type OnlineUser struct {
 	ConnectedAt time.Time  `json:"connected_at"`
 }
 
-// NotificationSettings cài đặt thông báo
 type NotificationSettings struct {
 	UserID                  string     `json:"user_id" bson:"user_id"`
 	EnablePushNotification  bool       `json:"enable_push_notification" bson:"enable_push_notification"`
