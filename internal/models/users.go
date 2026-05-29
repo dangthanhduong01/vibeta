@@ -6,7 +6,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// User đại diện cho một người dùng trong hệ thống
 type User struct {
 	ID         string         `json:"id" gorm:"primaryKey"`
 	Username   string         `json:"username" gorm:"uniqueIndex;not null"`
@@ -20,7 +19,6 @@ type User struct {
 	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
-// UserStatus đại diện cho trạng thái của người dùng
 type UserStatus string
 
 const (
@@ -30,7 +28,6 @@ const (
 	UserStatusBusy    UserStatus = "busy"
 )
 
-// CreateUserRequest request tạo user mới
 type CreateUserRequest struct {
 	Username string `json:"username" validate:"required,min=3,max=20"`
 	Email    string `json:"email" validate:"required,email"`
@@ -38,7 +35,6 @@ type CreateUserRequest struct {
 	Avatar   string `json:"avatar,omitempty"`
 }
 
-// UpdateUserRequest request cập nhật user
 type UpdateUserRequest struct {
 	FullName string     `json:"full_name,omitempty"`
 	Avatar   string     `json:"avatar,omitempty"`

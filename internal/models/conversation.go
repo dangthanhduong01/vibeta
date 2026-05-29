@@ -6,7 +6,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ConversationType đại diện cho loại cuộc trò chuyện
 type ConversationType string
 
 const (
@@ -14,7 +13,6 @@ const (
 	ConversationTypeGroup  ConversationType = "group"  // Chat nhóm
 )
 
-// Conversation đại diện cho một cuộc trò chuyện
 type Conversation struct {
 	ID          string           `json:"id" gorm:"primaryKey"`
 	Type        ConversationType `json:"type" gorm:"not null"`
@@ -32,7 +30,6 @@ type Conversation struct {
 	Messages     []Message                 `json:"messages,omitempty" gorm:"foreignKey:ConversationID"`
 }
 
-// ConversationParticipant người tham gia cuộc trò chuyện
 type ConversationParticipant struct {
 	ID             uint       `json:"id" gorm:"primaryKey;autoIncrement"`
 	ConversationID string     `json:"conversation_id" gorm:"not null;index"`
@@ -45,7 +42,6 @@ type ConversationParticipant struct {
 	User         User         `json:"user,omitempty" gorm:"foreignKey:UserID"`
 }
 
-// LastMessage thông tin tin nhắn cuối cùng trong conversation
 type LastMessage struct {
 	ID        string    `json:"id"`
 	Content   string    `json:"content"`
@@ -54,7 +50,6 @@ type LastMessage struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// CreateConversationRequest request tạo cuộc trò chuyện mới
 type CreateConversationRequest struct {
 	Type           ConversationType `json:"type" validate:"required"`
 	Name           string           `json:"name,omitempty" validate:"max=100"`
@@ -62,19 +57,16 @@ type CreateConversationRequest struct {
 	ParticipantIDs []string         `json:"participant_ids" validate:"required,min=1"`
 }
 
-// AddParticipantRequest request thêm người tham gia
 type AddParticipantRequest struct {
 	UserIDs []string `json:"user_ids" validate:"required,min=1"`
 }
 
-// UpdateConversationRequest request cập nhật cuộc trò chuyện
 type UpdateConversationRequest struct {
 	Name        string `json:"name,omitempty" validate:"max=100"`
 	Description string `json:"description,omitempty" validate:"max=500"`
 	Avatar      string `json:"avatar,omitempty"`
 }
 
-// ConversationWithDetails conversation với thông tin chi tiết
 type ConversationWithDetails struct {
 	Conversation
 	ParticipantDetails []User `json:"participant_details"`

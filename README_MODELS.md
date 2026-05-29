@@ -114,22 +114,22 @@ Truy cập: `http://localhost:8080`
 ## Tính năng
 
 ### Đã triển khai:
-- ✅ WebSocket connection management
-- ✅ Real-time messaging
-- ✅ Conversation management
-- ✅ User management trong WebSocket
-- ✅ Typing indicators
-- ✅ Join/Leave conversations
+- WebSocket connection management
+- Real-time messaging
+- Conversation management
+- User management trong WebSocket
+- Typing indicators
+- Join/Leave conversations
 
 ### Sẽ triển khai:
-- 🔄 Database integration (MongoDB/PostgreSQL)
-- 🔄 User authentication & authorization
-- 🔄 File upload & sharing
-- 🔄 Message reactions
-- 🔄 Message editing & deletion
-- 🔄 Push notifications
-- 🔄 Message search
-- 🔄 Message history pagination
+- Database integration (MongoDB/PostgreSQL)
+- User authentication & authorization
+- File upload & sharing
+- Message reactions
+- Message editing & deletion
+- Push notifications
+- Message search
+- Message history pagination
 
 ## API Endpoints (Tương lai)
 

@@ -23,7 +23,7 @@ make build && make run-all
 # Kafka UI: http://localhost:8090
 ```
 
-### 📋 Available Commands
+### Available Commands
 
 ```bash
 make help           # Show all commands
@@ -33,5 +33,5 @@ make run-all        # Run WebSocket + Workers
 make health         # Check system health
 ```
 
-📖 **Full documentation**: [SCALABLE_ARCHITECTURE.md](SCALABLE_ARCHITECTURE.md)
+**Full documentation**: [SCALABLE_ARCHITECTURE.md](SCALABLE_ARCHITECTURE.md)
 

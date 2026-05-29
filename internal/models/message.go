@@ -6,7 +6,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// MessageType đại diện cho loại tin nhắn
 type MessageType string
 
 const (
@@ -17,7 +16,6 @@ const (
 	MessageTypeReaction MessageType = "reaction"
 )
 
-// MessageStatus trạng thái tin nhắn
 type MessageStatus string
 
 const (
@@ -27,7 +25,6 @@ const (
 	MessageStatusFailed    MessageStatus = "failed"
 )
 
-// Message đại diện cho một tin nhắn
 type Message struct {
 	ID             string         `json:"id" gorm:"primaryKey"`
 	ConversationID string         `json:"conversation_id" gorm:"not null;index"`
@@ -48,7 +45,6 @@ type Message struct {
 	Conversation Conversation `json:"conversation,omitempty" gorm:"foreignKey:ConversationID"`
 }
 
-// Attachment đính kèm file
 type Attachment struct {
 	ID       string `json:"id"`
 	FileName string `json:"file_name"`
@@ -57,13 +53,11 @@ type Attachment struct {
 	URL      string `json:"url"`
 }
 
-// Reaction phản ứng với tin nhắn
 type Reaction struct {
 	UserID string `json:"user_id"`
 	Emoji  string `json:"emoji"`
 }
 
-// SendMessageRequest request gửi tin nhắn
 type SendMessageRequest struct {
 	ConversationID string       `json:"conversation_id" validate:"required"`
 	Content        string       `json:"content" validate:"required"`
@@ -72,13 +66,11 @@ type SendMessageRequest struct {
 	Attachments    []Attachment `json:"attachments,omitempty"`
 }
 
-// MessageWithSender tin nhắn kèm thông tin người gửi
 type MessageWithSender struct {
 	Message
 	Sender User `json:"sender"`
 }
 
-// WebSocketMessage tin nhắn qua WebSocket
 type WebSocketMessage struct {
 	Type   string      `json:"type"` // "message", "typing", "user_joined", "user_left", etc.
 	Data   interface{} `json:"data"`
@@ -86,7 +78,6 @@ type WebSocketMessage struct {
 	ConvID string      `json:"conversation_id,omitempty"`
 }
 
-// TypingIndicator chỉ báo đang gõ
 type TypingIndicator struct {
 	ConversationID string `json:"conversation_id"`
 	UserID         string `json:"user_id"`
